@@ -17,7 +17,6 @@ def get_relavent_lines():
             prefix = line[:10]
             if prefix == token_info or prefix == token_url:
                 lines.append(line[10:-1])
-    print(lines)
     return lines
 
 def move_log_file():
@@ -49,16 +48,32 @@ def build_tree(lines):
 
 
 def draw_tree(tree):
-    u = Digraph('deps', filename='deps.gv')
+    u = Digraph("deps")
     u.attr(size='6,6')
     u.node_attr.update(color='lightblue2', style='filled')
     for node in tree:
         print("Drawing an edge from ", node['stream_id'], " ", node['dependency'])
-        u.edge(str(node['stream_id']), str(node['dependency']))
+        u.edge(str(node['stream_id']), str(node['dependency']), label=str(node['weight']))
     
     u.view()
 
-lines = get_relavent_lines()
-move_log_file()
-tree = build_tree(lines)
-draw_tree(tree)
+
+def print_legend(lines):
+    for line in lines:
+        if 'url' in line:
+        try:
+            j = json.loads(line)
+            print()
+        except:
+            #print("Something went wrong with line: ", line)
+            pass
+
+def run()
+    lines = get_relavent_lines()
+    move_log_file()
+    tree = build_tree(lines)
+    draw_tree(tree)
+    print_legend(lines)
+
+
+run()
