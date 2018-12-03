@@ -1,0 +1,16 @@
+#libtls pkg-config source file
+
+prefix=/home/toor/project/libressl-build
+exec_prefix=${prefix}
+libdir=/home/toor/project/libressl-build/lib
+includedir=${prefix}/include
+
+Name: LibreSSL-libtls
+Description: Secure communications using the TLS socket protocol.
+Version: 2.4.4
+Requires:
+Requires.private: libcrypto libssl
+Conflicts:
+Libs: -L${libdir} -ltls
+Libs.private: -lresolv  -lcrypto -lssl 
+Cflags: -I${includedir}

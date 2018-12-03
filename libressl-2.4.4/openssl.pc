@@ -1,0 +1,11 @@
+#openssl pkg-config source file
+
+prefix=/home/toor/project/libressl-build
+exec_prefix=${prefix}
+libdir=/home/toor/project/libressl-build/lib
+includedir=${prefix}/include
+
+Name: LibreSSL
+Description: Secure Sockets Layer and cryptography libraries and tools
+Version: 2.4.4
+Requires: libssl libcrypto
