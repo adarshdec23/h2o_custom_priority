@@ -79,7 +79,7 @@ const h2o_protocol_callbacks_t H2O_HTTP2_CALLBACKS = {initiate_graceful_shutdown
 //////////////////////////////////////////////////////////////////////////////
 
 static void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_priority_t *priority);
-
+static void custom_print_req(const uint32_t stream_id, const  h2o_http2_priority_t *priority);
 /**
 Called before the authors get a chance to change any priority information. This is the base we use to understand how browsers 
 build their dependency tree
@@ -89,12 +89,13 @@ void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_pr
     for(int i=0; i<50; i++)
         printf("*");
     printf("\n");
-    printf("Received a stream creation request with the following information:\n");
-    printf("Steam ID: %d\n", stream_id);
-    printf("Weight: %d \nExclusive: %d\n Depends On Stream: %d\n", priority->weight, priority->exclusive, priority->dependency);
+    printf("*****+++++{'stream_id': %d, 'weight': %d, 'exclusive': %d, 'dependency': %d}\n", stream_id, priority->weight, priority->exclusive, priority->dependency);
 
 }
-
+void custom_print_req(const uint32_t stream_id, const  h2o_http2_priority_t *priority){
+    //Do nothing
+    return;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // chrome_http2_parallel_img_download
@@ -568,7 +569,7 @@ static int handle_incoming_request(h2o_http2_conn_t *conn, h2o_http2_stream_t *s
 {
     int ret, header_exists_map;
 
-    printf("connection.c:handle_incoming_request start");
+    printf("connection.c:handle_incoming_request start\n");
 
     assert(stream->state == H2O_HTTP2_STREAM_STATE_RECV_HEADERS);
 
@@ -788,7 +789,8 @@ static int handle_data_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, c
 
     return 0;
 }
-
+// Read a frame from a specific connection and get the associated stream from it.
+// This function is of interest because this is where we can get the request url
 static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, const char **err_desc)
 {
     h2o_http2_headers_payload_t payload;
@@ -821,6 +823,11 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
             return H2O_HTTP2_ERROR_STREAM_CLOSED;
         }
     }
+    // At this point we want to build the browsers default tree to see what that is like.
+    // So let's log that information. We can then change it to print the tree.
+    custom_print_req(frame->stream_id, &payload.priority);
+    custom_print_incoming_request(frame->stream_id, &payload.priority);
+
     if (SCHED_MODE_H2_PRIO_AWARE() && (frame->stream_id == payload.priority.dependency)) {
         *err_desc = "stream cannot depend on itself";
         return H2O_HTTP2_ERROR_PROTOCOL;
@@ -845,9 +852,7 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
         *err_desc = "could not update priority directives in HEADERS frame (cf. parallelism/serialization mode)";
         return H2O_HTTP2_ERROR_INTERNAL;
     }
-    // At this point we want to build the browsers default tree to see what that is like.
-    // So let's log that information. We can then change it to print the tree.
-    custom_print_incoming_request(frame->stream_id,&payload.priority);
+
     /* open or determine the stream and prepare */
     if ((stream = h2o_http2_conn_get_stream(conn, frame->stream_id)) != NULL) {
         // Do NOT allow the user agent to install an (updated) priority 
@@ -887,6 +892,7 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
             get_remote_addr_and_port(conn, remote_addr, &remote_port);
 
             h2o_write_log_conditional("Initiating HTTP/2 stream with ID %u for URL %s (connection %s:%i)\n", stream->stream_id, stream->req.input.path.base, remote_addr, remote_port);
+            printf("*****====={'stream_id':%u, 'url': %s}\n", stream->stream_id, stream->req.input.path.base);
         }
 	return res;
     }
@@ -1664,16 +1670,19 @@ static int foreach_request(h2o_context_t *ctx, int (*cb)(h2o_req_t *req, void *c
 
 void h2o_http2_accept(h2o_accept_ctx_t *ctx, h2o_socket_t *sock, struct timeval connected_at)
 {
+    printf("connection.c: h2o_http2_accept start");
     h2o_http2_conn_t *conn = create_conn(ctx->ctx, ctx->hosts, sock, connected_at);
     sock->data = conn;
     h2o_socket_read_start(conn->sock, on_read);
     update_idle_timeout(conn);
     if (sock->input->size != 0)
         on_read(sock, 0);
+    printf("connection.c: h2o_http2_accept end");
 }
 
 int h2o_http2_handle_upgrade(h2o_req_t *req, struct timeval connected_at)
 {
+    printf("connection.c: h2o_http2_handle_upgrade start");
     h2o_http2_conn_t *http2conn = create_conn(req->conn->ctx, req->conn->hosts, NULL, connected_at);
     h2o_http2_stream_t *stream;
     ssize_t connection_index, settings_index;
@@ -1714,7 +1723,7 @@ int h2o_http2_handle_upgrade(h2o_req_t *req, struct timeval connected_at)
     req->res.reason = "Switching Protocols";
     h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_UPGRADE, H2O_STRLIT("h2c"));
     h2o_http1_upgrade(req, (h2o_iovec_t *)&SETTINGS_HOST_BIN, 1, on_upgrade_complete, http2conn);
-
+    printf("connection.c: h2o_http2_handle_upgrade start");
     return 0;
 Error:
     h2o_linklist_unlink(&http2conn->_conns);

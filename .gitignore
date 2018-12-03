@@ -17,3 +17,4 @@ tmp/
 *.o
 h2o.xcodeproj/*
 h2o
+examples/doc_root/*
