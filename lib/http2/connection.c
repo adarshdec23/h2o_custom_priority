@@ -79,22 +79,13 @@ const h2o_protocol_callbacks_t H2O_HTTP2_CALLBACKS = {initiate_graceful_shutdown
 //////////////////////////////////////////////////////////////////////////////
 
 static void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_priority_t *priority);
-static void custom_print_req(const uint32_t stream_id, const  h2o_http2_priority_t *priority);
 /**
 Called before the authors get a chance to change any priority information. This is the base we use to understand how browsers 
 build their dependency tree
 */
 void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_priority_t *priority){
+    h2o_write_log_conditional("*****+++++{\"stream_id\": %d, \"weight\": %d, \"exclusive\": %d, \"dependency\": %d}\n", stream_id, priority->weight, priority->exclusive, priority->dependency);
 
-    for(int i=0; i<50; i++)
-        printf("*");
-    printf("\n");
-    printf("*****+++++{'stream_id': %d, 'weight': %d, 'exclusive': %d, 'dependency': %d}\n", stream_id, priority->weight, priority->exclusive, priority->dependency);
-
-}
-void custom_print_req(const uint32_t stream_id, const  h2o_http2_priority_t *priority){
-    //Do nothing
-    return;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -793,6 +784,7 @@ static int handle_data_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, c
 // This function is of interest because this is where we can get the request url
 static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, const char **err_desc)
 {
+    printf("handle_header_frame: Received a header frame\n");
     h2o_http2_headers_payload_t payload;
     h2o_http2_stream_t *stream;
     int ret;
@@ -825,7 +817,6 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
     }
     // At this point we want to build the browsers default tree to see what that is like.
     // So let's log that information. We can then change it to print the tree.
-    custom_print_req(frame->stream_id, &payload.priority);
     custom_print_incoming_request(frame->stream_id, &payload.priority);
 
     if (SCHED_MODE_H2_PRIO_AWARE() && (frame->stream_id == payload.priority.dependency)) {
@@ -892,7 +883,7 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
             get_remote_addr_and_port(conn, remote_addr, &remote_port);
 
             h2o_write_log_conditional("Initiating HTTP/2 stream with ID %u for URL %s (connection %s:%i)\n", stream->stream_id, stream->req.input.path.base, remote_addr, remote_port);
-            printf("*****====={'stream_id':%u, 'url': %s}\n", stream->stream_id, stream->req.input.path.base);
+            h2o_write_log_conditional("*****====={\"stream_id\":%u, \"url\": \"%s\"}\n", stream->stream_id, stream->req.input.path.base);
         }
 	return res;
     }
@@ -909,18 +900,23 @@ PREPARE_FOR_CONTINUATION:
 
 static int handle_priority_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, const char **err_desc)
 {
-    // Ignore H2 PRIORITY frames when doing priority-agnostic scheduling
-    if (SCHED_MODE_H2_PRIO_UNAWARE())
-        return 0;
-
-    h2o_http2_priority_t payload;
-    h2o_http2_stream_t *stream;
+    printf("Received a priority_frame\n");
     int ret;
+    h2o_http2_priority_t payload;
+    // Ignore H2 PRIORITY frames when doing priority-agnostic schedulingi
+    if (SCHED_MODE_H2_PRIO_UNAWARE()){
+        // Since we want to undestand default browser dependency trees, we'll decode the payload in all scenarios
+        // and log the incoming stream priorities
+        h2o_http2_decode_priority_payload(&payload, frame, err_desc);
+        printf("Ignoring the priority_frame, or are we. Yes, yes we are but not before logging it.\n");
+        custom_print_incoming_request(frame->stream_id, &payload);
+        return 0;
+    }
+
+    h2o_http2_stream_t *stream;
 
     if ((ret = h2o_http2_decode_priority_payload(&payload, frame, err_desc)) != 0)
         return ret;
-    printf("Received a pritofy frame \n");
-    custom_print_incoming_request(frame->stream_id, &payload);
     if (frame->stream_id == payload.dependency) {
         *err_desc = "stream cannot depend on itself";
         return H2O_HTTP2_ERROR_PROTOCOL;
@@ -959,6 +955,7 @@ static int handle_priority_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *fram
              */
             return H2O_HTTP2_ERROR_ENHANCE_YOUR_CALM;
         }
+        printf("Opening a stream with id: %u", frame->stream_id);
         stream = h2o_http2_stream_open(conn, frame->stream_id, NULL, &payload);
         set_priority(conn, stream, &payload, 0);
     }
@@ -987,6 +984,7 @@ static void resume_send(h2o_http2_conn_t *conn)
 
 static int handle_settings_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame, const char **err_desc)
 {
+    printf("handle_settings_frame: start\n");
     if (frame->stream_id != 0) {
         *err_desc = "invalid stream id in SETTINGS frame";
         return H2O_HTTP2_ERROR_PROTOCOL;
