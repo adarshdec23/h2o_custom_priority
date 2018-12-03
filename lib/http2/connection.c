@@ -78,15 +78,20 @@ const h2o_protocol_callbacks_t H2O_HTTP2_CALLBACKS = {initiate_graceful_shutdown
 // Custom code
 //////////////////////////////////////////////////////////////////////////////
 
-static void custom_print_incoming_request(const uint32_t &frame->stream_id, const  h2o_http2_priority_t *payload.priority);
+static void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_priority_t *priority);
 
 /**
 Called before the authors get a chance to change any priority information. This is the base we use to understand how browsers 
 build their dependency tree
 */
-void custom_print_incoming_request(const uint32_t &frame->stream_id, const  h2o_http2_priority_t *payload.priority){
+void custom_print_incoming_request(const uint32_t stream_id, const  h2o_http2_priority_t *priority){
 
-
+    for(int i=0; i<50; i++)
+        printf("*");
+    printf("\n");
+    printf("Received a stream creation request with the following information:\n");
+    printf("Steam ID: %d\n", stream_id);
+    printf("Weight: %d \nExclusive: %d\n Depends On Stream: %d\n", priority->weight, priority->exclusive, priority->dependency);
 
 }
 
@@ -908,6 +913,8 @@ static int handle_priority_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *fram
 
     if ((ret = h2o_http2_decode_priority_payload(&payload, frame, err_desc)) != 0)
         return ret;
+    printf("Received a pritofy frame \n");
+    custom_print_incoming_request(frame->stream_id, &payload);
     if (frame->stream_id == payload.dependency) {
         *err_desc = "stream cannot depend on itself";
         return H2O_HTTP2_ERROR_PROTOCOL;

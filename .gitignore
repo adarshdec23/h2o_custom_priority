@@ -16,3 +16,4 @@ tmp/
 *.a
 *.o
 h2o.xcodeproj/*
+h2o
