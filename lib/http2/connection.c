@@ -839,7 +839,7 @@ static int handle_headers_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *frame
     // Introduce some parallelism in Chrome's HTTP/2 prioritization 
     // strategy or, conversely, some serialization in Firefox's HTTP/2 
     // prioritization strategy
-    if (h2o_http2_update_priority_parallelism_serialization(conn, &payload.priority, H2O_USERAGENT_EXPECTED) == -1) {
+    if (SCHED_MODE_H2_PRIO_AWARE() && h2o_http2_update_priority_parallelism_serialization(conn, &payload.priority, H2O_USERAGENT_EXPECTED) == -1) {
         *err_desc = "could not update priority directives in HEADERS frame (cf. parallelism/serialization mode)";
         return H2O_HTTP2_ERROR_INTERNAL;
     }
@@ -1823,6 +1823,7 @@ static int h2o_http2_update_headersframe_priority(const h2o_http2_conn_t *conn,
                                                   h2o_http2_headers_payload_t *headers_payload, 
                                                   const sched_mode_t sched_mode)
 {
+
     if (sched_mode == SCHED_MODE_FLAG_FCFS) {
         // Apply First-Come-First-Served HTTP request servicing; this is 
         // achieved by constructing a completely linear H2 dep graph, with 
@@ -1880,7 +1881,6 @@ static int h2o_http2_update_priority_parallelism_serialization(const h2o_http2_c
         fprintf(stderr, "=== ERROR: Could not retrieve a handle to the idle/phantom streams for HTTP/2 connection %s:%i!\n", remote_addr, remote_port);
         return -1;
     }
-
     if (ua == UA_CHROME) {
         if (priority->weight > 183) {
             // Make high-priority resources exclusively dependent on 
