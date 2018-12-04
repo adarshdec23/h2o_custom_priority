@@ -903,13 +903,14 @@ static int handle_priority_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *fram
     printf("Received a priority_frame\n");
     int ret;
     h2o_http2_priority_t payload;
+    // Since we want to undestand default browser dependency trees, we'll decode the payload in all scenarios
+    // and log the incoming stream priorities
+    h2o_http2_decode_priority_payload(&payload, frame, err_desc);
+    printf("Ignoring the priority_frame, or are we. Yes, yes we are but not before logging it.\n");
+    custom_print_incoming_request(frame->stream_id, &payload);
+
     // Ignore H2 PRIORITY frames when doing priority-agnostic schedulingi
     if (SCHED_MODE_H2_PRIO_UNAWARE()){
-        // Since we want to undestand default browser dependency trees, we'll decode the payload in all scenarios
-        // and log the incoming stream priorities
-        h2o_http2_decode_priority_payload(&payload, frame, err_desc);
-        printf("Ignoring the priority_frame, or are we. Yes, yes we are but not before logging it.\n");
-        custom_print_incoming_request(frame->stream_id, &payload);
         return 0;
     }
 
@@ -1985,13 +1986,11 @@ int h2o_http2_update_weight_parallelism_serialization(const h2o_http2_conn_t *co
 
 void print_h2_dep_graph(h2o_http2_conn_t *conn)
 {
-    printf("Printing the dependency graph \n");
     print_h2_dep_subgraph(&conn->scheduler, 0);
 }
 
 void print_h2_dep_subgraph(const h2o_http2_scheduler_node_t *scheduler, const size_t level)
 {
-    printf("Printing the dependency subgraph\n");
     const h2o_linklist_t *link;
     size_t i = 0;
 
